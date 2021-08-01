@@ -1,0 +1,52 @@
+name:                L0
+version:             0.1.0.0
+github:              "Yakushima/L0"
+license:             BSD3
+author:              "Michael Turner"
+maintainer:          "michael.eugene.turner@gmail.com"
+copyright:           "2021 Michael Turner"
+
+extra-source-files:
+- README.md
+- ChangeLog.md
+
+# Metadata used when publishing your package
+# synopsis:            Short description of your package
+# category:            Web
+
+# To avoid duplicated efforts in documentation and dealing with the
+# complications of embedding Haddock markup inside cabal files, it is
+# common to point users to the README.md file.
+description:         Please see the README on GitHub at <https://github.com/githubuser/L0#readme>
+
+dependencies:
+- base >= 4.7 && < 5
+
+library:
+  source-dirs: src
+
+executables:
+  L0-exe:
+    main:                Main.hs
+    source-dirs:         app
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - L0
+    # Per https://github.com/commercialhaskell/stack/issues/5439:
+    when:
+    - condition: false
+      other-modules: Paths_L0
+
+tests:
+  L0-test:
+    main:                Spec.hs
+    source-dirs:         test
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - L0
