@@ -53,11 +53,11 @@ type Typed_Tree
 data Tree
       = Atom String | After Typed_Tree Typed_Tree | Before Typed_Tree Typed_Tree
 
--- Sentences: -----------------------------------------------------------------
+-- Sentences: -------------------------------------------------------
 
 type Sentence = [Typed_Tree]
 
--- words:
+-- words():
 --  "breaks a [white-space-separated] string up into a list of words"
 --
 --   https://hackage.haskell.org/package/base-4.15.0.0/docs/Prelude.html#v:words
@@ -109,8 +109,9 @@ all_splits_of these_trees
 
 all_before_parts_of :: [a] -> [[a]]
 
-all_before_parts_of [one_typed_tree]    -- nothing after first
-   = []
+all_before_parts_of [one_typed_tree]
+   = []    -- nothing after first
+
 all_before_parts_of (one_typed_tree:more_typed_trees)
    = map (one_typed_tree:) ([]:all_before_parts_of more_typed_trees)
 
@@ -122,8 +123,9 @@ all_before_parts_of (one_typed_tree:more_typed_trees)
 
 all_after_parts_of  :: [a] -> [[a]]
 
-all_after_parts_of [one_typed_tree]   -- nothing after last
-    = []
+all_after_parts_of [one_typed_tree]
+    = []   -- nothing after last
+
 all_after_parts_of (one_typed_tree:more_typed_trees)
     = more_typed_trees : all_after_parts_of more_typed_trees
 
@@ -250,13 +252,13 @@ app before_or_after (this_tree,this_trees_types) (other_tree,other_trees_types)
       type1 == tx
     ]
 
--- A More Sophisticated Algorithm: --------------------------------------------
+-- A More Sophisticated Algorithm: -------------------------------------------
 
 
 -- cache() maps sentences to an upper-left triangular array of
 -- sub-sentences and morphemes.
 --
--- Think of the trianlge as being tilted 45 degrees clockwise.
+-- Think of the triangle as being tilted 45 degrees clockwise.
 --
 -- Each element of the array is a digest of all the words spanned
 -- from the diagonals below the element. Thus, each cache element
@@ -274,7 +276,7 @@ app before_or_after (this_tree,this_trees_types) (other_tree,other_trees_types)
 -- so I guess you have to peel away some layers to get to any sentences
 -- derived at the upper left corner (or apex if you look at it as a
 -- heap structure.)
---
+
 fast_Typed_Trees       = head . head . cache
 
 -- if a "sentence" [(Typed_Tree,[Type])] is singleton, its cache entry
@@ -329,24 +331,41 @@ fast_Typed_Trees       = head . head . cache
 --
 --     [(I,[T])]
 
--- cache: turn a list of Typed_Trees into a cache
-cache           :: Sentence -> [[[Typed_Tree]]]
-cache [x]        = [[[x]]]
-cache (this_typed_tree:the_rest)
-    = [build this_typed_tree (transpose rs)] ++ rs
-                    where rs = cache the_rest
+type Row   = [[Typed_Tree]]
+-- type Cache = [[[Typed_Tree]]]
+type Cache = [Row]
 
-build           :: Typed_Tree -> [[[Typed_Tree]]] -> [[Typed_Tree]]
-build leaf []       = [[leaf]]
-build leaf (ts:tss) = g (reverse is) ts : is
- where is      = build leaf tss
-       g is ts = [ r | (i,t) <- zip is ts,
+-- cache: turn a list of Typed_Trees into a cache
+
+cache :: Sentence -> Cache
+
+cache [one_word]
+   = [[[one_word]]]
+
+cache (this_typed_tree:the_rest)
+   = [build this_typed_tree (transpose rs)] ++ rs
+     where rs = cache the_rest
+
+-- The call to build will be wrapped in [...] so it's really
+-- returning a Cache result.
+
+build :: Typed_Tree -> Cache -> [[Typed_Tree]]
+
+build typed_tree []
+  = [[typed_tree]]
+
+-- guessing that "is" meant something like "intermediates"
+build typed_tree (row:rest_of_rows)
+  = g (reverse intermediates) row : intermediates
+    where intermediates       = build typed_tree rest_of_rows
+          g is row = [ r | (i,t) <- zip is row,
                         ti   <- i,
                         tt   <- t,
                         r    <- combination_of ti tt ]
 
-explain         :: String -> IO ()
-explain          = putStrLn . unlines . map draw_Typed_Tree . fast_Typed_Trees . sentence
+explain :: String -> IO ()
+
+explain = putStrLn . unlines . map draw_Typed_Tree . fast_Typed_Trees . sentence
 
 -- Drawing trees: -------------------------------------------------------------
 
