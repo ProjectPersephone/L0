@@ -1,11 +1,11 @@
 -- was module AUG
 
+{-# LANGUAGE DeriveDataTypeable #-}
+
 module Main where
 
 import Lib
 
--- import Options.Applicative
--- import Data.Semigroup ((<>))
 import Debug.Trace
 
 -------------------------------------------------------------------------------
@@ -25,6 +25,21 @@ import Debug.Trace
 --module AUG where 
 
 import Data.List(transpose)
+
+import Data.Data
+import Data.Typeable
+import Data.String
+import Data.Char
+
+-- Included only to figure out how to print a constructor:
+--
+data Day = Monday | Tuesday | Wednesday| Thursday | Friday | Saturday | Sunday deriving (Typeable,Data)
+
+instance Show Day where
+    -- show = strToLower . showConstr . toConstr
+    show = showConstr . toConstr
+
+
 
 -- Types and Trees: -----------------------------------------------------------
 
@@ -50,8 +65,14 @@ instance Show Type where
 
 type Typed_Tree
       = (Tree,[Type]) 
+
 data Tree
       = Atom String | After Typed_Tree Typed_Tree | Before Typed_Tree Typed_Tree
+
+-- Order (Before/After)
+
+type Order = Typed_Tree -> Typed_Tree -> Tree
+
 
 -- Sentences: -------------------------------------------------------
 
@@ -84,6 +105,7 @@ typed_trees_of       :: Sentence -> [Typed_Tree]
 
 typed_trees_of [one_typed_tree]               -- singleton
     = [one_typed_tree]
+
 typed_trees_of this_sentence
     = [ tt | (before_part,after_part) <- all_splits_of this_sentence,
              before  <- typed_trees_of before_part,
@@ -148,7 +170,7 @@ combination_of before after
 -- app:
 --
 -- This part of the code
---     (before_or_after (this_tree,[O x y]) (some_other_tree,[x]), [y])
+--     (order (this_tree,[O x y]) (some_other_tree,[x]), [y])
 -- says if   this_tree has type       O x y
 --      and  some_other_tree has type x,
 --      then application of this_tree to some_other_tree has type y.
@@ -160,14 +182,14 @@ combination_of before after
  
     -- Naively
     --
-    -- app before_or_after
+    -- app order
     --     (this_tree,this_trees_types)
     --     (other_tree,other_trees_types)
     -- {
     --	    list = []
     --      for all (O type1 type2) in this_trees_types
     --        if type1 is in other_trees_types
-    --             list += ( before_or_after
+    --             list += ( order
     --                       (this_tree, [O type1 type2])
     --                       (other_tree, [type1])
     --                       [type2]
@@ -178,19 +200,19 @@ combination_of before after
     -- so, try a recursive procedure:
     --------------------------------
     --
-    -- app before_or_after
+    -- app order
     --     (_,[])
     --     (_,_)
     -- = []
     --
-    -- app before_or_after
+    -- app order
     --     (this_tree,[O type1 type2:the_rest])
     --     (other_tree,other_trees_types)
     -- {
-    --    L = app before_or_after (this_tree (the_rest))
+    --    L = app order (this_tree (the_rest))
     --                            (other_tree,other_trees_types)
     --    if type1 is in other_trees_types
-    --       return [( before_or_after
+    --       return [( order
     --                       (this_tree, [O type1 type2])
     --                       (other_tree, [type1])
     --                       [type2]
@@ -203,32 +225,32 @@ combination_of before after
     --------------------------
     -- Tail-recursive version:
     --------------------------
-    -- app before_or_after
+    -- app order
     --     (this_tree,[O type1 type2:the_rest])
     --     (other_tree,other_trees_types)
     -- =
     --    if type1 is in other_trees_types
-    --       [( before_or_after
+    --       [( order
     --                 (this_tree, [O type1 type2])
     --                 (other_tree, [type1])
     --                 [type2]
     --        )
     --        : 
-    --        app before_or_after (this_tree (the_rest))
+    --        app order (this_tree (the_rest))
     --                            (other_tree,other_trees_types)
     --        ]
     --    else
-    --       app before_or_after (this_tree (the_rest))
+    --       app order (this_tree (the_rest))
     --                           (other_tree,other_trees_types)
     -- 
-    -- app before_or_after
+    -- app order
     --     (this_tree,[T:the_rest])
     --     (other_tree,other_trees_types)
     -- = 
-    --       app before_or_after (this_tree (the_rest))
+    --       app order (this_tree (the_rest))
     --                           (other_tree,other_trees_types)
     --
-    -- app before_or_after
+    -- app order
     --     (this_tree,[])
     --     (other_tree,other_trees_types)
     --     = []
@@ -236,15 +258,33 @@ combination_of before after
     -------
     -- The above could probably be done more compactly with a case expression
   
+-- (Typed_Tree -> Typed_Tree -> Tree) -- the type of Before/After
+-- See:
+-- https://wiki.haskell.org/Constructor#Data_constructors_as_first_class_values
+-- 
+
 app :: 
-    (Typed_Tree -> Typed_Tree -> Tree)
-    -> Typed_Tree -> Typed_Tree
-    -> [Typed_Tree]
+    Order
+    -> Typed_Tree                         -- the TT to be applied
+    -> Typed_Tree                         -- TT applied to
+       -> [Typed_Tree]                    -- result list
   
-app before_or_after (this_tree,this_trees_types) (other_tree,other_trees_types)
-  = [ ( before_or_after             -- just carry the constructor tag in
-           (this_tree,[O type1 type2])
-           (other_tree,[type1]),
+app order (tt, ttts) (ot, otts)
+   | trace (
+         "app Before/After "   ++
+             "("  ++ show tt   ++
+             ","  ++ show ttts ++
+             ") " ++
+             "("  ++ show ot   ++
+             ","  ++ show otts ++
+             ")"
+           )
+     False = undefined
+
+app order (this_tree,this_trees_types) (other_tree,other_trees_types)
+  = [ ( order 
+           (this_tree,  [O type1 type2])
+           (other_tree, [type1]),
         [type2]
       )
     | (O type1 type2) <- this_trees_types,
@@ -339,9 +379,11 @@ type Cache = [Row]
 
 cache :: Sentence -> Cache
 
+cache [one_word] | trace ("cache [" ++ show one_word ++ "]") False = undefined
 cache [one_word]
    = [[[one_word]]]
 
+cache (x:xs) | trace ("cache ("++show x++":"++show xs++")") False = undefined
 cache (this_typed_tree:the_rest)
    = [build this_typed_tree (transpose rs)] ++ rs
      where rs = cache the_rest
@@ -351,10 +393,12 @@ cache (this_typed_tree:the_rest)
 
 build :: Typed_Tree -> Cache -> [[Typed_Tree]]
 
+build a [] | trace ("build " ++ show a ++ " []") False = undefined
 build typed_tree []
   = [[typed_tree]]
 
 -- guessing that "is" meant something like "intermediates"
+build a b | trace ("build " ++ show a ++ " " ++ show b) False = undefined
 build typed_tree (row:rest_of_rows)
   = g (reverse intermediates) row : intermediates
     where intermediates       = build typed_tree rest_of_rows
@@ -564,19 +608,20 @@ tree (tr, ty)  = tr
 
 instance Show Tree where
   showsPrec d (Atom s)           = showString s
-  showsPrec d (After t (Atom s,_)) = shows (tree t)  .  showChar ' '    .
-                                   showString s
+  showsPrec d (After t (Atom s,_)) = shows (tree t)  .
+                                     showChar ' '    .
+                                     showString s
   showsPrec d (After t u)          = shows (tree t)  .
-                                   showString " (" .
-                                   shows (tree u)  .
-                                   showChar ')'
+                                     showString " (" .
+                                     shows (tree u)  .
+                                     showChar ')'
   showsPrec d (Before t (Atom s,_)) = shows (tree t)  .
-                                   showChar ' '    .
-                                   showString s
+                                      showChar ' '    .
+                                      showString s
   showsPrec d (Before t u)          = shows (tree t)  .
-                                   showString " (" .
-                                   shows (tree u)  .
-                                   showChar ')'
+                                      showString " (" .
+                                      shows (tree u)  .
+                                      showChar ')'
 
 -------------------------------------------------------------------------------
 
